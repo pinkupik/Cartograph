@@ -626,14 +626,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_return;
 	}
 
-	// Sometimes lines go crazy (goes to the top or far right) if we don't delay.
-	// My guess is because EndDraw and BeginDraw are called in the same frame, so I'm putting it here.
-	co_await UE5Coro::Latent::NextTick();
 
-	UCanvas* Canvas = nullptr;
-	FVector2D _;
-	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
-	CurrentCanvas = Canvas->Canvas;
 
 	if (IsRedrawingEntirely)
 	{
@@ -655,14 +648,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		CARTO_LOG_DEBUG("RedrawArea: %s", *RedrawArea.ToString());
 	}
 
-	FCanvasTileItem ClearItem{
-		{ 0, 0 },
-		{ RENDER_TEXTURE_SIZE, RENDER_TEXTURE_SIZE },
-		{ 0, 0, 0, 0 }
-	};
-	ClearItem.BlendMode = SE_BLEND_Opaque;
 
-	Canvas->DrawItem(ClearItem);
 
 
     const int32 Min = Algo::LowerBound(CurrentBuildingData, MinZFilter);
@@ -716,6 +702,40 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		CARTO_LOG_DEBUG("Overlapping Elements: %d", BuildingsToDraw.Num());
 	}
 
+	TArray<UTexture2D*> LoadedTexturesToKeepAlive;
+	for (int32 i : BuildingsToDraw)
+	{
+		const auto& [ClassHash, Transform, BuildableExtraData, DataType, DataCache, LayerDataCache, VisualBoxCache] = CurrentBuildingData[i];
+		if (DataType == EBuildingDataType::Icon)
+		{
+			if (const FNormalDataCache* NormalDataCachePtr = std::get_if<FNormalDataCache>(&DataCache))
+			{
+				if (const TSoftObjectPtr<UTexture2D>* Texture = std::get_if<TSoftObjectPtr<UTexture2D>>(&NormalDataCachePtr->IconOrRectangleData))
+				{
+					if (Texture && !Texture->IsNull() && !Texture->Get())
+					{
+						UTexture2D* LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(*Texture);
+						if (LoadedTexture) LoadedTexturesToKeepAlive.Add(LoadedTexture);
+					}
+				}
+			}
+		}
+		co_await Budget;
+	}
+
+	UCanvas* Canvas = nullptr;
+	FVector2D _;
+	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
+	CurrentCanvas = Canvas->Canvas;
+
+	FCanvasTileItem ClearItem{
+		{ 0, 0 },
+		{ RENDER_TEXTURE_SIZE, RENDER_TEXTURE_SIZE },
+		{ 0, 0, 0, 0 }
+	};
+	ClearItem.BlendMode = SE_BLEND_Opaque;
+	Canvas->DrawItem(ClearItem);
+
 	for (int32 i : BuildingsToDraw)
 	{
         const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, 
@@ -756,13 +776,12 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
             const TSoftObjectPtr<UTexture2D>* Texture = std::get_if<TSoftObjectPtr<UTexture2D>>(&IconOrRectangleData);
             CARTO_LOG_ERROR_BREAK_IF_NULL(Texture);
 
-			// The texture might have gotten unloaded between redraws, so we can't cache it.
+			// The texture should be loaded by the pre-pass
 			const UTexture2D* LoadedTexture = Texture->Get();
 			if (!LoadedTexture)
 			{
-				LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(*Texture);
+				continue;
 			}
-			CARTO_LOG_ERROR_BREAK_IF_NULL(LoadedTexture);
 
 			FCanvasTileItem TileItem{
 				ScreenPosition,
@@ -803,16 +822,12 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			TileItem.Rotation = Rotation;
 
 			Canvas->DrawItem(TileItem);
-			co_await Budget;
 
 			if (CategoryData->OutlineThickness > 0)
 			{
 				draw_line(Canvas, Corners[0], Corners[1], CategoryData->OutlineColor, CategoryData->OutlineThickness);
-				co_await Budget;
 				draw_line(Canvas, Corners[1], Corners[2], CategoryData->OutlineColor, CategoryData->OutlineThickness);
-				co_await Budget;
 				draw_line(Canvas, Corners[2], Corners[3], CategoryData->OutlineColor, CategoryData->OutlineThickness);
-				co_await Budget;
 				draw_line(Canvas, Corners[3], Corners[0], CategoryData->OutlineColor, CategoryData->OutlineThickness);
 			}
 
@@ -832,7 +847,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
             {
                 draw_line(Canvas, SplineExtraData->Points[j], SplineExtraData->Points[j + 1],
 					SplineDataCachePtr->SplineData->Color, SplineDataCachePtr->SplineData->Thickness);
-                co_await Budget;
             }
 
 			break;
@@ -885,9 +899,13 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			draw_line(Canvas, FVector2D{ MaxPoint.X, MaxPoint.Y }, FVector2D{ MinPoint.X, MaxPoint.Y }, Color, Thickness);
 			draw_line(Canvas, FVector2D{ MinPoint.X, MaxPoint.Y }, FVector2D{ MinPoint.X, MinPoint.Y }, Color, Thickness);
 		}
-
-		co_await Budget;
 	}
+
+    if (RenderContext.RenderTarget)
+    {
+        UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(this, RenderContext);
+		RenderContext = {};
+    }
 
 	IsRedrawingEntirely = false;
 	RedrawArea = {};
