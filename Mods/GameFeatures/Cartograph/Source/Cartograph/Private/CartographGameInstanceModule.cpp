@@ -1,4 +1,4 @@
-﻿#include "CartographGameInstanceModule.h"
+#include "CartographGameInstanceModule.h"
 
 #include <sstream>
 
@@ -323,6 +323,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			[](auto& Scope, FCanvas* ClassInstance,
 				FCanvas::EElementType InElementType, FBatchedElementParameters* InBatchedElementParameters, const FTexture* InTexture, ESimpleElementBlendMode InBlendMode, const FDepthFieldGlowInfo& GlowInfo, bool bApplyDPIScale)
 			{
+				if (!UCartographGameInstanceModule::Instance || ClassInstance != UCartographGameInstanceModule::Instance->CurrentCanvas)
+				{
+					return;
+				}
+
 				// get sort element based on the current sort key from top of sort key stack
 				FCanvas::FCanvasSortElement& SortElement = ClassInstance->GetSortElement(ClassInstance->TopDepthSortKey());
 				// find a batch to use 

@@ -1,4 +1,4 @@
-﻿#include "Util/CartographCanvasRenderItem.h"
+#include "Util/CartographCanvasRenderItem.h"
 
 #include "CanvasRender.h"
 #include "CartographGameInstanceModule.h"
@@ -122,6 +122,10 @@ bool FCartographCanvasRenderItem::Render_GameThread(const FCanvas* Canvas, FCanv
 	}
 	if (Canvas->GetAllowedModes() & FCanvas::Allow_DeleteOnRender)
 	{
+		if (!bDirty)
+		{
+			delete Data;
+		}
 		Data = nullptr;
 	}
 #endif

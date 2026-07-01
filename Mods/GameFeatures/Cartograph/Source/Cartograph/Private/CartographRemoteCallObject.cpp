@@ -1,4 +1,4 @@
-﻿#include "CartographRemoteCallObject.h"
+#include "CartographRemoteCallObject.h"
 
 #include "Net/UnrealNetwork.h"
 
@@ -157,4 +157,7 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
     UCartographGameInstanceModule::Instance->IsInitializing = false;
     UCartographGameInstanceModule::Instance->OnZFilterUpdated(0, 1);
     UCartographGameInstanceModule::Instance->RedrawMap(true);
+
+    Buffer.Empty();
+    ReceivedSliceCount = 0;
 }
