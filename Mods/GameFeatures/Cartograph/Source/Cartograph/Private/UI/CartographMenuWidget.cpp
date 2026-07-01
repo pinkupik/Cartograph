@@ -103,7 +103,7 @@ void UCartographMenuWidget::InitializeLayers()
             CARTO_LOG_WARNING("Can't find descriptor data for %s", *BuildableClass->GetName());
             continue;
         }
-        UTexture2D* Icon = DescriptorData->Icon;
+        UTexture2D* Icon = DescriptorData->Icon.LoadSynchronous();
         if (!Icon)
         {
             continue;

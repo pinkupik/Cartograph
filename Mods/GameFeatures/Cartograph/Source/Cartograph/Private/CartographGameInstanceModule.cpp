@@ -1432,7 +1432,7 @@ void UCartographGameInstanceModule::GatherBuildables()
 			}
 		}
 
-        UTexture2D* Icon = DescriptorInstance->mSmallIcon;
+        TSoftObjectPtr<UTexture2D> Icon = DescriptorInstance->mSmallIcon;
 		if (!Icon)
 		{
             // Some buildings like blueprint designers don't have small icon

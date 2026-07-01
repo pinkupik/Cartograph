@@ -157,7 +157,7 @@ struct FBuildingDescriptorData
     TSubclassOf<UFGBuildSubCategory> SubCategory;
 
 	UPROPERTY(EditDefaultsOnly)
-	TObjectPtr<UTexture2D> Icon;
+	TSoftObjectPtr<UTexture2D> Icon;
 };
 
 
