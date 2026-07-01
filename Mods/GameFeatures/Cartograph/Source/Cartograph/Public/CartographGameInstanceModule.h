@@ -331,7 +331,7 @@ public:
     FWireData UnspecifiedWireData;
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "UI")
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")

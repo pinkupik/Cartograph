@@ -396,7 +396,7 @@ void UCartographGameInstanceModule::OnWorldLoaded(UWorld* World)
 
 	if (!FPlatformProperties::IsServerOnly())
 	{
-		UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
+		// RenderTarget is dynamically allocated when needed
 	}
 }
 
@@ -1270,10 +1270,21 @@ void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* W
 
 	if (IsOpen)
 	{
+		if (!RenderTarget)
+		{
+			RenderTarget = UCanvasRenderTarget2D::CreateCanvasRenderTarget2D(this, UCanvasRenderTarget2D::StaticClass(), RENDER_TEXTURE_SIZE, RENDER_TEXTURE_SIZE);
+			RedrawMap(true);
+		}
+
 		auto* RootWidget = Cast<UWidget>(Widget->GetParent()->GetOuter()->GetOuter());
         CARTO_LOG_ERROR_RETURN_IF_NULL(RootWidget);
 		FOutputDeviceNull Ar;
 		RootWidget->CallFunctionByNameWithArguments(TEXT("SetFiltersCollapsed 1"), Ar, nullptr, true);
+	}
+	else
+	{
+		RenderTarget = nullptr;
+		IsPendingRedrawEntire = true;
 	}
 }
 
@@ -1316,6 +1327,13 @@ void UCartographGameInstanceModule::OnVanillaMapMenuShown(const UUserWidget* Wid
 
 	FOutputDeviceNull Ar;
 	Button->CallFunctionByNameWithArguments(TEXT("SetShowHideText"), Ar, nullptr, true);
+	
+	// Force GC of RenderTarget since map is closed initially
+	if (UCartographGameInstanceModule* MutableThis = const_cast<UCartographGameInstanceModule*>(this))
+	{
+		MutableThis->RenderTarget = nullptr;
+		MutableThis->IsPendingRedrawEntire = true;
+	}
 }
 #pragma endregion
 
