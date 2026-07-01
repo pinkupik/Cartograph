@@ -268,10 +268,11 @@ void FBuildingData::FillInCache(const TSubclassOf<AFGBuildable>& OriginalBuildab
 	CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
 
 	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
-	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
+	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(TSoftClassPtr<AFGBuildable>(OriginalBuildableClass.Get()));
 	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
+	const TSoftClassPtr<AFGBuildable> SoftBuildableClass(BuildableClass);
 
-	const uint32* ClassID = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass);
+	const uint32* ClassID = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(SoftBuildableClass);
 	if (!ClassID)
 	{
 		CARTO_LOG_ERROR("Can't find hash for %s", *BuildableClass->GetName());
@@ -291,7 +292,7 @@ void FBuildingData::FillInCache(const TSubclassOf<AFGBuildable>& OriginalBuildab
 		const auto& BuildableSplineDataMap = UCartographGameInstanceModule::Instance->BuildableSplineDataMap;
 
 		const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
-		if (!SplineData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+		if (!SplineData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(SoftBuildableClass))
 		{
             SplineData = &UCartographGameInstanceModule::Instance->UnspecifiedSplineData;
 		}
@@ -327,7 +328,7 @@ void FBuildingData::FillInCache(const TSubclassOf<AFGBuildable>& OriginalBuildab
 		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
 
 		const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
-        if (!WireData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+        if (!WireData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(SoftBuildableClass))
         {
             WireData = &UCartographGameInstanceModule::Instance->UnspecifiedWireData;
         }
@@ -350,7 +351,7 @@ void FBuildingData::FillInCache(const TSubclassOf<AFGBuildable>& OriginalBuildab
 		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
 
 		const FWireData* BeamData = BuildableWireDataMap.Find(BuildableClass.Get());
-        if (!BeamData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+        if (!BeamData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(SoftBuildableClass))
         {
             BeamData = &UCartographGameInstanceModule::Instance->UnspecifiedWireData;
         }
@@ -404,7 +405,7 @@ void FBuildingData::FillInCache(const TSubclassOf<AFGBuildable>& OriginalBuildab
 				UCartographGameInstanceModule::Instance->BuildableBuildCategoryDataOverrideMap,
 				UCartographGameInstanceModule::Instance->BuildCategoryDataMap,
 				BuildableClass.Get());
-			if (!CategoryData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+			if (!CategoryData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(SoftBuildableClass))
 			{
 				CategoryData = &UCartographGameInstanceModule::Instance->UnspecifiedCategoryData;
 			}
@@ -451,10 +452,11 @@ void FBuildingData::FillInHash(const TSubclassOf<AFGBuildable>& OriginalBuildabl
 	CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
 
 	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
-	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
+	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(TSoftClassPtr<AFGBuildable>(OriginalBuildableClass.Get()));
 	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
+	const TSoftClassPtr<AFGBuildable> SoftBuildableClass(BuildableClass);
 
-	if (const uint32* Hash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass))
+	if (const uint32* Hash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(SoftBuildableClass))
 	{
 		BuildableClassHash = *Hash;
 	}

@@ -1165,27 +1165,31 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 
 	for (const auto& [OriginalBuildableClass, _] : ClassPtrToClassIDMap)
 	{
-		if (!OriginalBuildableClass || BuildableToIgnore.Contains(OriginalBuildableClass.Get()))
+		if (OriginalBuildableClass.IsNull())
 		{
 			continue;
 		}
 
-		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
-		const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
+		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass);
+		const TSoftClassPtr<AFGBuildable> BuildableClass = RedirectClass ? *RedirectClass : OriginalBuildableClass;
 
 		const uint32* BuildableClassHash = ClassPtrToClassIDMap.Find(BuildableClass);
 		if (!BuildableClassHash)
 		{
-			CARTO_LOG_ERROR("Can't find hash for %s", *BuildableClass->GetName());
 			continue;
 		}
 
-
-        const FBuildLayerData* LayerData = GetDataByBuildableClass(BuildableBuildLayerDataOverrideMap, BuildLayerDataMap, BuildableClass);
-		if (!LayerData && ModdedBuildings.Contains(BuildableClass.Get()))
+        const FBuildLayerData* LayerData = nullptr;
+		if (ModdedBuildings.Contains(BuildableClass))
 		{
-			const FString& ModName = *ModdedBuildings.Find(BuildableClass.Get());
+			const FString& ModName = *ModdedBuildings.Find(BuildableClass);
             LayerData = ModdedBuildLayerData.Find(ModName);
+		}
+		// Try loaded class if available for non-modded
+		else if (UClass* LoadedClass = BuildableClass.Get())
+		{
+			if (BuildableToIgnore.Contains(LoadedClass)) continue;
+			LayerData = GetDataByBuildableClass(BuildableBuildLayerDataOverrideMap, BuildLayerDataMap, LoadedClass);
 		}
 		if (!LayerData)
 		{
@@ -1346,15 +1350,10 @@ void UCartographGameInstanceModule::GatherBuildables()
 
 	for (const FTopLevelAssetPath& AssetPath : GetDerivedClassPaths(AFGBuildable::StaticClass()))
 	{
-		const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
-        if (!Class)
-        {
-            CARTO_LOG_ERROR("Failed to load class from path: %s", *AssetPath.ToString());
-            continue;
-        }
-
-		const FString Name = Class->GetName();
+        TSoftClassPtr<AFGBuildable> Class(FSoftObjectPath(AssetPath.ToString()));
+		const FString Name = AssetPath.GetAssetName().ToString();
 		const FString PackageName = AssetPath.GetPackageName().ToString();
+
 		if (PackageName.StartsWith("/Script")
 			|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
 		{
@@ -1365,7 +1364,7 @@ void UCartographGameInstanceModule::GatherBuildables()
 		{
 			const int32 Index = PackageName.Find(TEXT("/"), ESearchCase::IgnoreCase, ESearchDir::FromStart, 2);
 			const FString ModName = PackageName.Mid(1, Index - 1);
-			ModdedBuildings.Add(Class.Get(), ModName);
+			ModdedBuildings.Add(Class, ModName);
 			FLayerCategoryData* ModdedCategory = LayerCategories.FindByPredicate(
 				[](const FLayerCategoryData& CategoryData) { return CategoryData.Name == UnspecifiedMainCategory; });
 			CARTO_LOG_ERROR_DO_IF_NULL(ModdedCategory, continue);
@@ -1392,67 +1391,9 @@ void UCartographGameInstanceModule::GatherBuildables()
 		ClassIDToClassPtrMap.Add(Hash, Class);
 		CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
 	}
-	for (const FTopLevelAssetPath& AssetPath : GetDerivedClassPaths(UFGBuildingDescriptor::StaticClass()))
-	{
-		const TSubclassOf<UFGBuildingDescriptor> Descriptor = StaticLoadClass(UFGBuildingDescriptor::StaticClass(), nullptr, *AssetPath.ToString());
-        if (!Descriptor)
-        {
-            CARTO_LOG_ERROR("Failed to load descriptor from path: %s", *AssetPath.ToString());
-            continue;
-        }
-
-		const FString Name = Descriptor->GetName();
-		const FString PackageName = AssetPath.GetPackageName().ToString();
-		if (PackageName.StartsWith("/Script")
-			|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
-		{
-			continue;
-		}
-
-		const auto* DescriptorInstance = GetDefault<UFGBuildingDescriptor>(Descriptor);
-		CARTO_LOG_ERROR_DO_IF_NULL(DescriptorInstance, continue);
-		TSubclassOf<AFGBuildable> BuildableClass = DescriptorInstance->mBuildableClass;
-		if (!BuildableClass)
-		{
-			continue;
-		}
-
-		TSubclassOf<UFGBuildSubCategory> BuildSubCategory;
-		for (const TSubclassOf<UFGCategory>& SubCategory : DescriptorInstance->mSubCategories)
-		{
-            if (!SubCategory)
-            {
-                continue;
-            }
-
-			if (SubCategory->IsChildOf(UFGBuildSubCategory::StaticClass()))
-			{
-				BuildSubCategory = SubCategory;
-				break;
-			}
-		}
-
-        TSoftObjectPtr<UTexture2D> Icon = DescriptorInstance->mSmallIcon;
-		if (!Icon)
-		{
-            // Some buildings like blueprint designers don't have small icon
-			Icon = DescriptorInstance->mPersistentBigIcon;
-		}
-
-        ClassPtrToDescriptorDataMap.Add(BuildableClass, FBuildingDescriptorData{
-			.Category = DescriptorInstance->mCategory,
-			.SubCategory = BuildSubCategory,
-			.Icon = Icon,
-        });
-		
-		CARTO_LOG_DEBUG("Path: %s, Class: %s, BuildableClass: %s, NoIcon: %d",
-			*AssetPath.ToString(), 
-			*Name, 
-			*BuildableClass->GetName(),
-			Icon == nullptr);
-	}
-
-    CARTO_LOG("Buildables Gathered. Buildable: %d, Descriptor: %d", ClassPtrToClassIDMap.Num(), ClassPtrToDescriptorDataMap.Num());
+	
+	// Descriptor gathering is deferred until a building of that class is actually loaded/placed in the world.
+	// This prevents the massive RAM/VRAM leak at startup.
 }
 
 
